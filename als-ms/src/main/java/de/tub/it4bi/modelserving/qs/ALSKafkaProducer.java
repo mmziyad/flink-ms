@@ -33,8 +33,8 @@ public class ALSKafkaProducer {
                 parameterTool.getProperties());          // custom configuration for KafkaProducer (including broker list)
 
         // the following is necessary for at-least-once delivery guarantee
-        //myProducerConfig.setLogFailuresOnly(false);   // "false" by default
-        //myProducerConfig.setFlushOnCheckpoint(true);  // "false" by default
+        myProducerConfig.setLogFailuresOnly(false);   // "false" by default
+        myProducerConfig.setFlushOnCheckpoint(true);  // "false" by default
 
         env.execute();
     }

@@ -5,8 +5,6 @@ package de.tub.it4bi.modelserving.qs; /**
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.api.common.typeutils.base.LongSerializer;
-import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.configuration.ConfigConstants;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.query.QueryableStateClient;
@@ -103,7 +101,6 @@ public class QueryClientHelper<K, V> implements AutoCloseable {
         if (name == null) {
             throw new NullPointerException("Name");
         }
-
         if (key == null) {
             throw new NullPointerException("Key");
         }
@@ -141,5 +138,4 @@ public class QueryClientHelper<K, V> implements AutoCloseable {
     public void close() throws Exception {
         client.shutDown();
     }
-
 }

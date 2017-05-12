@@ -7,7 +7,6 @@ import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
-import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
@@ -39,11 +38,16 @@ public class ALSKafkaConsumer {
                 new SimpleStringSchema(),
                 parameterTool.getProperties()));
 
-        DataStream<Tuple2<String, String>> modelFactors = messageStream.map((MapFunction<String, Tuple2<String, String>>) value -> {
-            String tokens[] = value.split(",");
-            String id = tokens[0] + "-" + tokens[1];
-            return new Tuple2<>(id, tokens[2]);
+        DataStream<Tuple2<String, String>> modelFactors = messageStream.map(new MapFunction<String, Tuple2<String, String>>() {
+            @Override
+            public Tuple2<String, String> map(String value) throws Exception {
+                String tokens[] = value.split(",");
+                String id = tokens[0] + "-" + tokens[1];
+                return new Tuple2<String, String>(id, tokens[2]);
+            }
         });
+
+        modelFactors.print();
 
         // store the values in the state
         ValueStateDescriptor<Tuple2<String, String>> modelState = new ValueStateDescriptor<>(
@@ -53,10 +57,6 @@ public class ALSKafkaConsumer {
 
         modelFactors.keyBy(0)
                 .asQueryableState("ALS_MODEL", modelState);
-
-        // Get the Job ID for querying client
-        JobGraph jobGraph = env.getStreamGraph().getJobGraph();
-        System.out.println("[info] Job ID: " + jobGraph.getJobID());
 
         env.execute("ALS Model Serving with Queryable State");
     }

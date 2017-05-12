@@ -1,6 +1,8 @@
 package de.tub.it4bi.modelserving.qs;
 
 import jline.console.ConsoleReader;
+import org.apache.commons.math3.linear.ArrayRealVector;
+import org.apache.commons.math3.linear.RealVector;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
@@ -11,6 +13,7 @@ import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.api.java.tuple.Tuple2;
 
 import java.io.PrintWriter;
+import java.util.Arrays;
 import java.util.Optional;
 
 /**
@@ -57,16 +60,35 @@ public class ALSPredict {
             String line;
             while ((line = reader.readLine()) != null) {
                 String key = line.toUpperCase().trim();
-                out.printf("[info] Querying key '%s'\n", key);
-
+                out.printf("[info] Querying the model for <user,item> pair '%s'\n", key);
                 try {
-                    long start = System.currentTimeMillis();
-                    Optional<Tuple2<String, String>> factor = client.queryState("ALS_MODEL", key);
 
-                    if (factor.isPresent()) {
-                        out.printf(key + " # " + factor.get().f1);
+                    String tokens[] = key.split(",");
+                    String userID = tokens[0] + "-U";
+                    String itemID = tokens[1] + "-I";
+
+                    Optional<Tuple2<String, String>> userTuple = client.queryState("ALS_MODEL", userID);
+                    Optional<Tuple2<String, String>> itemTuple = client.queryState("ALS_MODEL", itemID);
+
+                    if (userTuple.isPresent() && itemTuple.isPresent()) {
+
+                        // create user vector
+                        double[] userFactors = Arrays.stream(userTuple.get().f1.split(";"))
+                                .mapToDouble(Double::parseDouble)
+                                .toArray();
+                        RealVector userVector = new ArrayRealVector(userFactors);
+
+                        // create item vector
+                        double[] itemFactors = Arrays.stream(itemTuple.get().f1.split(";"))
+                                .mapToDouble(Double::parseDouble)
+                                .toArray();
+                        RealVector itemVector = new ArrayRealVector(itemFactors);
+
+                        // prediction is the dot product of vectors
+                        double prediction = userVector.dotProduct(itemVector);
+                        out.printf("ALS Prediction =  %f \n", prediction);
                     } else {
-                        out.printf("Unknown key: ", key);
+                        out.printf("User or Item Factors do not exist in the model for the query: ", key);
                     }
                 } catch (Exception e) {
                     out.println("Query failed because of the following Exception:");
@@ -77,7 +99,6 @@ public class ALSPredict {
     }
 
     private static void printUsage() {
-        System.out.println("Enter a key to query.");
-        System.out.println("The keys are specified as ID-U or ID-I. eg: 12345-U , 6789-I");
+        System.out.println("Enter <User,Item> to predict.");
     }
 }

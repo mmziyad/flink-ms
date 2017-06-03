@@ -1,12 +1,12 @@
 package de.tub.it4bi.modelserving.qs;
 
 import org.apache.flink.api.common.functions.MapFunction;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.contrib.streaming.state.RocksDBStateBackend;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
@@ -29,9 +29,12 @@ public class ALSKafkaConsumer {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
         env.getConfig().disableSysoutLogging();
-        env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000));
-        env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
+        // env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000));
+        // env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
         env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
+
+        // set RocksDB state backend
+        env.setStateBackend(new RocksDBStateBackend(parameterTool.getRequired("checkpointDataUri")));
 
         DataStream<String> messageStream = env.addSource(new FlinkKafkaConsumer010<String>(
                 parameterTool.getRequired("topic"),
@@ -46,8 +49,6 @@ public class ALSKafkaConsumer {
                 return new Tuple2<String, String>(id, tokens[2]);
             }
         });
-
-        modelFactors.print();
 
         // store the values in the state
         ValueStateDescriptor<Tuple2<String, String>> modelState = new ValueStateDescriptor<>(

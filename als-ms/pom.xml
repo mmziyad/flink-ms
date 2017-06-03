@@ -226,8 +226,8 @@ under the License.
                                     <exclude>org.apache.flink:flink-python</exclude>
                                     <exclude>org.apache.flink:flink-metrics-core</exclude>
                                     <exclude>org.apache.flink:flink-metrics-jmx</exclude>
-                                    <exclude>org.apache.flink:flink-statebackend-rocksdb_${scala.binary.version}
-                                    </exclude>
+                                    <exclude>org.apache.flink:flink-statebackend-rocksdb_${scala.binary.version}</exclude>
+                                    <exclude>org.rocksdb:rocksdbjni</exclude>
 
                                     <!-- Also exclude very big transitive dependencies of Flink
                                     WARNING: You have to remove these excludes if your code relies on other

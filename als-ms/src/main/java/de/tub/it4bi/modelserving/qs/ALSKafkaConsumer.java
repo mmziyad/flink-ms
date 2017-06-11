@@ -7,23 +7,28 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.contrib.streaming.state.RocksDBStateBackend;
+import org.apache.flink.runtime.state.filesystem.FsStateBackend;
+import org.apache.flink.runtime.state.memory.MemoryStateBackend;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
 import org.apache.flink.streaming.util.serialization.SimpleStringSchema;
+
+import java.io.IOException;
 
 /**
  * Created by zis on 06/05/17.
  */
 public class ALSKafkaConsumer {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         // parse input arguments
         final ParameterTool parameterTool = ParameterTool.fromArgs(args);
 
         if (parameterTool.getNumberOfParameters() < 4) {
             System.out.println("Missing parameters!\nUsage: Kafka --topic <topic> " +
-                    "--bootstrap.servers <kafka brokers> --zookeeper.connect <zk quorum> --group.id <some id>");
+                    "--bootstrap.servers <kafka brokers> --zookeeper.connect <zk quorum> --group.id <some id>" +
+                    "--checkpointDataUri <hdfs/local url> --stateBackend <rocksdb/memory/fs> ");
             return;
         }
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -33,8 +38,19 @@ public class ALSKafkaConsumer {
         // env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
         env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
 
-        // set RocksDB state backend
-        env.setStateBackend(new RocksDBStateBackend(parameterTool.getRequired("checkpointDataUri")));
+        // set state backend
+        try {
+            if (parameterTool.getRequired("stateBackend").equals("rocksdb")) {
+                env.setStateBackend(new RocksDBStateBackend(parameterTool.getRequired("checkpointDataUri")));
+            } else if (parameterTool.getRequired("stateBackend").equals("fs")) {
+                env.setStateBackend(new FsStateBackend(parameterTool.getRequired("checkpointDataUri")));
+            } else if (parameterTool.getRequired("stateBackend").equals("memory")) {
+                env.setStateBackend(new MemoryStateBackend());
+            }
+        } catch (IOException e) {
+            System.err.printf("Unable to create state backend: %s", parameterTool.getRequired("stateBackend"));
+            e.printStackTrace();
+        }
 
         DataStream<String> messageStream = env.addSource(new FlinkKafkaConsumer010<String>(
                 parameterTool.getRequired("topic"),
@@ -59,6 +75,10 @@ public class ALSKafkaConsumer {
         modelFactors.keyBy(0)
                 .asQueryableState("ALS_MODEL", modelState);
 
-        env.execute("ALS Model Serving with Queryable State");
+        try {
+            env.execute("ALS Model Serving with Queryable State");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

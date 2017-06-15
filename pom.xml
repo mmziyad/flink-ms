@@ -13,5 +13,6 @@
         <module>als-ms</module>
         <module>flink-queryable-client</module>
         <module>flink-svm</module>
+        <module>svm-ms</module>
     </modules>
 </project>

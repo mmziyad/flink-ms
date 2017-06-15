@@ -57,6 +57,7 @@ public class ALSKafkaConsumer {
                 new SimpleStringSchema(),
                 parameterTool.getProperties()));
 
+        // From the kafka stream, derive the ID, type (user/item), and feature values
         DataStream<Tuple2<String, String>> modelFactors = messageStream.map(new MapFunction<String, Tuple2<String, String>>() {
             @Override
             public Tuple2<String, String> map(String value) throws Exception {
@@ -72,6 +73,7 @@ public class ALSKafkaConsumer {
                 TypeInformation.of(new TypeHint<Tuple2<String, String>>() {
                 }));
 
+        // make the state queryable
         modelFactors.keyBy(0)
                 .asQueryableState("ALS_MODEL", modelState);
 

@@ -9,10 +9,9 @@
     <packaging>pom</packaging>
     <version>1.0-SNAPSHOT</version>
     <modules>
-        <module>queryable-state</module>
         <module>flink-als</module>
         <module>als-ms</module>
+        <module>flink-queryable-client</module>
+        <module>flink-svm</module>
     </modules>
-
-
 </project>

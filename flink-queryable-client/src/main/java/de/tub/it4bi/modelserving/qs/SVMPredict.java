@@ -9,11 +9,8 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.api.java.tuple.Tuple3;
 
 import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -66,8 +63,8 @@ public class SVMPredict {
                 out.printf("[info] Querying the model for vector '%s'\n", line);
                 try {
                     String tokens[] = line.trim().split(" ");
-                    List<Tuple3<Integer, Double, Double>> features = new ArrayList<>();
-
+                    double prediction;
+                    double rawValue = 0;
                     for (String s : tokens) {
                         String pair[] = s.split(":");
                         String id = pair[0];
@@ -77,17 +74,10 @@ public class SVMPredict {
 
                         if (modelVal.isPresent()) {
                             double refVal = Double.parseDouble(modelVal.get().f1);
-                            if (refVal != 0) {
-                                features.add(new Tuple3<>(Integer.parseInt(id), val, refVal));
-                            }
+                            rawValue += refVal * val;
                         } else {
-                            out.printf("Could not find the value for feature ID: ", id);
+                            out.printf("Could not find the value for feature ID: %s", id);
                         }
-                    }
-                    double prediction = 0;
-                    double rawValue = 0;
-                    for (Tuple3<Integer, Double, Double> t : features) {
-                        rawValue += t.f1 * t.f2;
                     }
                     if (outputDecisionFunction) {
                         prediction = rawValue;

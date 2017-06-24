@@ -1,7 +1,9 @@
 package de.tub.it4bi.modelserving.qs;
 
 import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -15,6 +17,7 @@ import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
 import org.apache.flink.streaming.util.serialization.SimpleStringSchema;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by zis on 06/05/17.
@@ -25,18 +28,25 @@ public class ALSKafkaConsumer {
         // parse input arguments
         final ParameterTool parameterTool = ParameterTool.fromArgs(args);
 
-        if (parameterTool.getNumberOfParameters() < 4) {
+        if (parameterTool.getNumberOfParameters() < 6) {
             System.out.println("Missing parameters!\nUsage: Kafka --topic <topic> " +
                     "--bootstrap.servers <kafka brokers> --zookeeper.connect <zk quorum> --group.id <some id>" +
                     "--checkpointDataUri <hdfs/local url> --stateBackend <rocksdb/memory/fs> ");
             return;
         }
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
         env.getConfig().disableSysoutLogging();
-        // env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000));
-        // env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
-        env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
+        env.getConfig().setGlobalJobParameters(parameterTool);
+
+        // default checkpoint interval is set to 1 minute
+        env.enableCheckpointing(parameterTool.getInt("checkPointInterval", 60000));
+        // allow only one checkpoint to be in progress at the same time
+        env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+        // fixed delay restart
+        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(
+                3, // number of restart attempts
+                Time.of(10, TimeUnit.SECONDS) // delay
+        ));
 
         // set state backend
         try {

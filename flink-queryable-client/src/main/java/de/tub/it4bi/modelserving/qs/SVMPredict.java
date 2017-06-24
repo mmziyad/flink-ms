@@ -60,7 +60,7 @@ public class SVMPredict {
             String line;
             while ((line = reader.readLine()) != null) {
                 // "4:0.161826 5:0.0758621 6:0.176471 11:0.428571 17:0.860463"
-                out.printf("[info] Querying the model for vector '%s'\n", line);
+                out.printf("[info] Querying the model for vector '%s' \n", line);
                 try {
                     String tokens[] = line.trim().split(" ");
                     double prediction;
@@ -76,7 +76,7 @@ public class SVMPredict {
                             double refVal = Double.parseDouble(modelVal.get().f1);
                             rawValue += refVal * val;
                         } else {
-                            out.printf("Could not find the value for feature ID: %s", id);
+                            out.printf("Could not find the value for feature ID: %s \n", id);
                         }
                     }
                     if (outputDecisionFunction) {
@@ -95,6 +95,6 @@ public class SVMPredict {
     }
 
     private static void printUsage() {
-        System.out.println("Enter <User,Item> to predict.");
+        System.out.println("Enter Vector data to predict.");
     }
 }

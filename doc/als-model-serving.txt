@@ -1,0 +1,161 @@
+Script to load the ALS model to Kafka Topic
+-------------------------------------------
+
+bin/zookeeper-server-start.sh config/zookeeper.properties &
+
+0. (If not exists) create a multinode kafka cluster
+
+cp config/server.properties config/server-1.properties
+cp config/server.properties config/server-2.properties
+
+
+config/server.properties:
+    broker.id=0
+    listeners=PLAINTEXT://:9092
+    log.dir=/tmp/kafka-logs
+
+config/server-1.properties:
+    broker.id=1
+    listeners=PLAINTEXT://:9093
+    log.dir=/tmp/kafka-logs-1
+
+config/server-2.properties:
+    broker.id=2
+    listeners=PLAINTEXT://:9094
+    log.dir=/tmp/kafka-logs-2
+
+
+bin/kafka-server-start.sh config/server.properties &    
+bin/kafka-server-start.sh config/server-1.properties &
+bin/kafka-server-start.sh config/server-2.properties &
+
+1. (If not exists) create the kafka topic
+=========================================
+
+create topic ‘als’
+bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 3 --topic als
+
+check with a console consumer:
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092,localhost:9093,localhost:9094 --topic als --from-beginning
+
+
+2. Run Flink ALS
+================
+
+bin/flink run -c de.tub.it4bi.ALSImpl /Users/zis/git/flink-ms/flink-als/target/flink-als-1.0-SNAPSHOT.jar \
+--input /Users/zis/Documents/IT4BI/semester-IV/data/ml-20m/ratings.csv \
+--itemFactors /tmp/ml-20m/itemFactors  \
+--userFactors /tmp/ml-20m/userFactors
+
+
+3. Start the Flink Streaming application
+========================================
+
+bin/flink run -c de.tub.it4bi.modelserving.qs.ALSKafkaConsumer /Users/zis/git/flink-ms/als-ms/target/als-ms-1.0-SNAPSHOT.jar \
+--topic als \
+--stateBackend rocksdb \
+--checkpointDataUri 'file:///Users/zis/flink-state/checkpoint/als' \
+--bootstrap.servers localhost:9092,localhost:9093,localhost:9094 \
+--zookeeper.connect localhost:2181 \
+--group.id als-consumer-group 
+
+
+4. Load data to Kafka topic
+===========================
+
+bin/flink run -c de.tub.it4bi.modelserving.qs.ALSKafkaProducer /Users/zis/git/flink-ms/als-ms/target/als-ms-1.0-SNAPSHOT.jar \
+--input /tmp/factors \
+--topic als \
+--bootstrap.servers localhost:9092,localhost:9093,localhost:9094
+
+ml-20m
+------
+bin/flink run -c de.tub.it4bi.modelserving.qs.ALSKafkaProducer /Users/zis/git/flink-ms/als-ms/target/als-ms-1.0-SNAPSHOT.jar \
+--input /tmp/ml-20m \
+--topic als \
+--bootstrap.servers localhost:9092,localhost:9093,localhost:9094
+
+
+5. Cancel the job with a save point
+===================================
+
+bin/flink cancel -s [:targetDirectory] :jobId
+
+bin/flink cancel -s /Users/zis/flink-state/savepoints/als :jobId
+
+6. Restart from savepoint
+=========================
+
+bin/flink run -s :savepointPath [:runArgs]
+
+bin/flink run -s /Users/zis/flink-state/savepoints/als/savepoint-id \
+-c de.tub.it4bi.modelserving.qs.ALSKafkaConsumer /Users/zis/git/flink-ms/als-ms/target/als-ms-1.0-SNAPSHOT.jar \
+--topic als \
+--stateBackend rocksdb \
+--checkpointDataUri 'file:///Users/zis/flink-state/checkpoint/als' \
+--bootstrap.servers localhost:9092,localhost:9093,localhost:9094 \
+--zookeeper.connect localhost:2181 \
+--group.id als-consumer-group
+
+
+7. Query client
+===============
+
+java -cp flink-queryable-client/target/flink-queryable-client-1.0-SNAPSHOT-allinone.jar de.tub.it4bi.modelserving.qs.ALSPredictRandom \
+--jobId  val \
+--jobManagerHost val \
+--jobManagerPort val \
+--numQueries val \
+--upperItemId val \
+--upperUserId val \
+--lowerItemId val \
+--lowerUserId val \
+--queryTimeout val \
+--outputFile val
+
+eg:
+
+java -cp flink-queryable-client/target/flink-queryable-client-1.0-SNAPSHOT-allinone.jar de.tub.it4bi.modelserving.qs.ALSPredictRandom \
+--jobId d49791b4a6c77e36380252c853334fc3 \
+--numQueries 10000  \
+--upperItemId 131262  \
+--upperUserId 138000 \
+--outputFile /tmp/results.csv
+
+
+
+
+8. To see the status
+====================
+
+kafka topic:
+bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic als
+bin/kafka-run-class.sh kafka.tools.GetOffsetShell --broker-list localhost:9092,localhost:9093,localhost:9094 -topic als
+
+consumer group:
+bin/kafka-consumer-groups.sh --describe --zookeeper localhost:2181  --describe  --group als-consumer-group
+bin/kafka-consumer-groups.sh --list --zookeeper localhost:2181
+
+
+9. To delete 
+============
+
+topic:
+bin/kafka-run-class.sh kafka.admin.TopicCommand --zookeeper localhost:2181 --delete --topic als 
+bin/kafka-topics.sh --delete  --zookeeper localhost:2181  --topic als
+
+consumer group:
+bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --delete --group als-consumer-group
+
+to delete savepoints:
+bin/flink savepoint -d :savepointPath
+bin/flink savepoint -d /Users/zis/flink-state/savepoints/als
+
+
+10. To shutdown kafka cluster
+============================
+
+bin/kafka-server-stop.sh
+bin/zookeeper-server-stop.sh
+
+# end of document

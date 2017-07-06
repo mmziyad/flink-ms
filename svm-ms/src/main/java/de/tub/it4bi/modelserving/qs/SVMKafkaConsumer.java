@@ -68,13 +68,15 @@ public class SVMKafkaConsumer {
                 parameterTool.getProperties()));
 
         // From the kafka stream, store the feature ID and its value
-        DataStream<Tuple2<String, String>> modelFactors = messageStream.map(new MapFunction<String, Tuple2<String, String>>() {
-            @Override
-            public Tuple2<String, String> map(String value) throws Exception {
-                String tokens[] = value.split(",");
-                return new Tuple2<String, String>(tokens[0], tokens[1]);
-            }
-        });
+        DataStream<Tuple2<String, String>> modelFactors = messageStream
+                .rebalance() // evenly distribute the load to next operator
+                .map(new MapFunction<String, Tuple2<String, String>>() {
+                    @Override
+                    public Tuple2<String, String> map(String value) throws Exception {
+                        String tokens[] = value.split(",");
+                        return new Tuple2<String, String>(tokens[0], tokens[1]);
+                    }
+                });
 
         // store the values in the state
         ValueStateDescriptor<Tuple2<String, String>> modelState = new ValueStateDescriptor<>(

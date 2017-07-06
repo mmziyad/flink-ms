@@ -12,6 +12,8 @@ import org.apache.flink.ml.recommendation.ALS
   * Sample parameters:
   * --input "flink-als/data/ratings.csv"
   * --testing "flink-als/data/testing.csv"
+  * --fieldDelimiter "\t"
+  * --ignoreFirstLine false
   * --itemFactors "/tmp/itemFactors"
   * --userFactors "/tmp/userFactors"
   */
@@ -20,19 +22,21 @@ object ALSImpl {
 
   def main(args: Array[String]) {
 
-    //params
-    val params: ParameterTool = ParameterTool.fromArgs(args)
+    val env = ExecutionEnvironment.getExecutionEnvironment //env
+    val params: ParameterTool = ParameterTool.fromArgs(args) //params
+    env.getConfig.setGlobalJobParameters(params) // make parameters available in the web interface
+    val fieldDelimiter = params.get("fieldDelimiter", ",") match {
+      case "tab" => "\t"
+      case "comma" => ","
+    }
+    val ignoreFirstLine = params.getBoolean("ignoreFirstLine", true)
 
-    //env
-    val env = ExecutionEnvironment.getExecutionEnvironment
-
-    // make parameters available in the web interface
-    env.getConfig.setGlobalJobParameters(params)
-
-    // Read input data set from a csv file
     if (params.has("input")) {
       val inputDS: DataSet[(Int, Int, Double)] = env
-        .readCsvFile[(Int, Int, Double)](params.get("input"),ignoreFirstLine = true)
+        .readCsvFile[(Int, Int, Double)](
+        filePath = params.get("input"),
+        fieldDelimiter = fieldDelimiter,
+        ignoreFirstLine = ignoreFirstLine)
 
       // Setup the ALS learner
       val als = ALS()
@@ -91,4 +95,5 @@ object ALSImpl {
   case class OutputFactor(id: Long, typeOfFeature: String, factors: Array[Double]) {
     override def toString: String = s"$id,$typeOfFeature,${factors.mkString(";")}"
   }
+
 }

@@ -88,7 +88,7 @@ object ALSImpl {
     * @param typeOfFeature
     * @param factors
     */
-  case class OutputFactor(id: Int, typeOfFeature: String, factors: Array[Double]) {
+  case class OutputFactor(id: Long, typeOfFeature: String, factors: Array[Double]) {
     override def toString: String = s"$id,$typeOfFeature,${factors.mkString(";")}"
   }
 }

@@ -5,8 +5,10 @@ package de.tub.it4bi.modelserving.qs; /**
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.configuration.ConfigConstants;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.JobManagerOptions;
+import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
+import org.apache.flink.runtime.highavailability.HighAvailabilityServicesUtils;
 import org.apache.flink.runtime.query.QueryableStateClient;
 import org.apache.flink.runtime.query.netty.UnknownKeyOrNamespace;
 import org.apache.flink.runtime.query.netty.message.KvStateRequestSerializer;
@@ -18,6 +20,7 @@ import scala.concurrent.Future;
 import scala.concurrent.duration.FiniteDuration;
 
 import java.util.Optional;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -31,29 +34,19 @@ import java.util.concurrent.TimeUnit;
  */
 public class QueryClientHelper<K, V> implements AutoCloseable {
 
-    /**
-     * ID of the job to query.
-     */
+    /** ID of the job to query.*/
     private final JobID jobId;
 
-    /**
-     * Serializer for the keys.
-     */
+    /*** Serializer for the keys.*/
     private final TypeSerializer<K> keySerializer;
 
-    /**
-     * Serializer for the result values.
-     */
+    /** Serializer for the result values.*/
     private final TypeSerializer<V> valueSerializer;
 
-    /**
-     * Timeout for each query. After this timeout, the query fails with a {@link TimeoutException}.
-     */
+    /**Timeout for each query. After this timeout, the query fails with a {@link TimeoutException}.*/
     private final FiniteDuration queryTimeout;
 
-    /**
-     * The wrapper low-level {@link QueryableStateClient}.
-     */
+    /**The wrapper low-level {@link QueryableStateClient}.*/
     private final QueryableStateClient client;
 
     /**
@@ -81,10 +74,17 @@ public class QueryClientHelper<K, V> implements AutoCloseable {
         this.queryTimeout = new FiniteDuration(queryTimeout.toMilliseconds(), TimeUnit.MILLISECONDS);
 
         Configuration config = new Configuration();
-        config.setString(ConfigConstants.JOB_MANAGER_IPC_ADDRESS_KEY, jobManagerHost);
-        config.setInteger(ConfigConstants.JOB_MANAGER_IPC_PORT_KEY, jobManagerPort);
+        config.setString(JobManagerOptions.ADDRESS, jobManagerHost);
+        config.setInteger(JobManagerOptions.PORT, jobManagerPort);
 
-        this.client = new QueryableStateClient(config);
+        final HighAvailabilityServices highAvailabilityServices =
+                HighAvailabilityServicesUtils.createHighAvailabilityServices(
+                        config,
+                        Executors.newSingleThreadScheduledExecutor(),
+                        HighAvailabilityServicesUtils.AddressResolution.TRY_ADDRESS_RESOLUTION);
+
+        this.client = new QueryableStateClient(config, highAvailabilityServices);
+
     }
 
 

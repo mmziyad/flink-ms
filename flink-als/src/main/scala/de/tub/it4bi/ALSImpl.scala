@@ -7,24 +7,18 @@ import org.apache.flink.ml.common.ParameterMap
 import org.apache.flink.ml.recommendation.ALS
 
 /**
-  * Created by zis on 17/04/17.
-  *
-  * Sample parameters:
-  * --input "flink-als/data/ratings.csv"
-  * --testing "flink-als/data/testing.csv"
-  * --fieldDelimiter "\t"
-  * --ignoreFirstLine false
-  * --itemFactors "/tmp/itemFactors"
-  * --userFactors "/tmp/userFactors"
+  * ALS job producing user and item Factors
   */
 
 object ALSImpl {
 
   def main(args: Array[String]) {
 
-    val env = ExecutionEnvironment.getExecutionEnvironment //env
-    val params: ParameterTool = ParameterTool.fromArgs(args) //params
-    env.getConfig.setGlobalJobParameters(params) // make parameters available in the web interface
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    val params: ParameterTool = ParameterTool.fromArgs(args)
+    env.getConfig.setGlobalJobParameters(params)
+
+    // only comma or tab are supported.
     val fieldDelimiter = params.get("fieldDelimiter", ",") match {
       case "tab" => "\t"
       case "comma" => ","
@@ -32,43 +26,31 @@ object ALSImpl {
     val ignoreFirstLine = params.getBoolean("ignoreFirstLine", true)
 
     if (params.has("input")) {
-      val inputDS: DataSet[(Int, Int, Double)] = env
-        .readCsvFile[(Int, Int, Double)](
+      val inputDS: DataSet[(Int, Int, Double)] = env.readCsvFile[(Int, Int, Double)](
         filePath = params.get("input"),
         fieldDelimiter = fieldDelimiter,
         ignoreFirstLine = ignoreFirstLine)
 
       // Setup the ALS learner
       val als = ALS()
-        .setIterations(10)
-        .setNumFactors(10)
-        .setBlocks(100)
-      //.setTemporaryPath("hdfs://tempPath")
+        .setIterations(params.getInt("iterations", 10))
+        .setNumFactors(params.getInt("numFactors", 10))
+
+      if (params.has("blocks")) als.setBlocks(params.getInt("blocks"))
+      if (params.has("temporaryPath")) als.setTemporaryPath(params.get("temporaryPath"))
 
       // Set the other parameters via a parameter map
       val parameters = ParameterMap()
-        .add(ALS.Lambda, 0.9)
-        .add(ALS.Seed, 42L)
+        .add(ALS.Lambda, params.getDouble("lambda", 0.9))
+        .add(ALS.Seed, params.getLong("seed", 42L))
 
       // Calculate the factorization
       als.fit(inputDS, parameters)
 
-      // ********* For Testing the model *************** //
-      // Read the testing data set from a csv file
-      // val testingDS: DataSet[(Int, Int)] = env.readCsvFile[(Int, Int)](params.get("testing"))
-      // Calculate the ratings according to the matrix factorization
-      // val predictedRatings = als.predict(testingDS)
-      // ********* For Testing the model *************** //
-
       // item Factors
-      val itemFactors = als
-        .factorsOption.get._2
-        .map { t => new OutputFactor(t.id, "I", t.factors) }
-
+      val itemFactors = als.factorsOption.get._2.map { t => new OutputFactor(t.id, "I", t.factors) }
       // user Factors
-      val userFactors = als
-        .factorsOption.get._1
-        .map { t => new OutputFactor(t.id, "U", t.factors) }
+      val userFactors = als.factorsOption.get._1.map { t => new OutputFactor(t.id, "U", t.factors) }
 
       // prepare output
       if (params.has("itemFactors") && params.has("userFactors")) {
@@ -76,8 +58,10 @@ object ALSImpl {
         userFactors.writeAsText(params.get("userFactors"), WriteMode.OVERWRITE)
       } else {
         println("Printing results to stdout. Use --itemFactors and --userFactors to specify output locations.")
-        itemFactors.print()
+        println("==== USER FACTORS ====")
         userFactors.print()
+        println("==== ITEM FACTORS ====")
+        itemFactors.print()
       }
       env.execute("ALS Training")
     } else {

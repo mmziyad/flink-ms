@@ -20,7 +20,7 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Created by zis on 06/05/17.
+ * Consume the SVM model from the Kafka topic and load to the specified state backend as queryable state
  */
 public class SVMKafkaConsumer {
 
@@ -30,8 +30,11 @@ public class SVMKafkaConsumer {
 
         if (parameterTool.getNumberOfParameters() < 6) {
             System.out.println("Missing parameters!\nUsage: Kafka --topic <topic> " +
-                    "--bootstrap.servers <kafka brokers> --zookeeper.connect <zk quorum> --group.id <some id>" +
-                    "--checkpointDataUri <hdfs/local url> --stateBackend <rocksdb/memory/fs> ");
+                    "--bootstrap.servers <kafka brokers> " +
+                    "--zookeeper.connect <zk quorum> " +
+                    "--group.id <some id>" +
+                    "--checkpointDataUri <hdfs/local url> " +
+                    "--stateBackend <rocksdb/memory/fs> ");
             return;
         }
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();

@@ -17,7 +17,7 @@ import java.util.Arrays;
 import java.util.Optional;
 
 /**
- * Created by zis on 06/05/17.
+ * ALS java client accepting point queries from console
  */
 public class ALSPredict {
 
@@ -25,7 +25,8 @@ public class ALSPredict {
 
         if (args.length == 0) {
             throw new IllegalArgumentException("Missing required job ID argument. "
-                    + "Usage: ./de.tub.it4bi.modelserving.qs.ALSPredict <jobID> [jobManagerHost] [jobManagerPort]");
+                    + "Usage: ./de.tub.it4bi.modelserving.qs.ALSPredict " +
+                    "<jobID> [jobManagerHost] [jobManagerPort]");
         }
         String jobIdParam = args[0];
 
@@ -37,20 +38,18 @@ public class ALSPredict {
 
         final JobID jobId = JobID.fromHexString(jobIdParam);
         final StringSerializer keySerializer = StringSerializer.INSTANCE;
-        final TypeSerializer<Tuple2<String, String>> valueSerializer =
-                TypeInformation.of(new TypeHint<Tuple2<String, String>>() {
+        final TypeSerializer<Tuple2<String, String>> valueSerializer = TypeInformation.of(
+                new TypeHint<Tuple2<String, String>>() {
                 }).createSerializer(new ExecutionConfig());
         final Time queryTimeout = Time.seconds(5);
 
-        try (
-                // This helper is for convenience and not part of Flink
-                QueryClientHelper<String, Tuple2<String, String>> client = new QueryClientHelper<>(
-                        jobManagerHost,
-                        jobManagerPort,
-                        jobId,
-                        keySerializer,
-                        valueSerializer,
-                        queryTimeout)) {
+        try (QueryClientHelper<String, Tuple2<String, String>> client = new QueryClientHelper<>(
+                jobManagerHost,
+                jobManagerPort,
+                jobId,
+                keySerializer,
+                valueSerializer,
+                queryTimeout)) {
 
             printUsage();
             ConsoleReader reader = new ConsoleReader();
@@ -71,19 +70,14 @@ public class ALSPredict {
                     Optional<Tuple2<String, String>> itemTuple = client.queryState("ALS_MODEL", itemID);
 
                     if (userTuple.isPresent() && itemTuple.isPresent()) {
-
                         // create user vector
                         double[] userFactors = Arrays.stream(userTuple.get().f1.split(";"))
-                                .mapToDouble(Double::parseDouble)
-                                .toArray();
+                                .mapToDouble(Double::parseDouble).toArray();
                         RealVector userVector = new ArrayRealVector(userFactors);
-
                         // create item vector
                         double[] itemFactors = Arrays.stream(itemTuple.get().f1.split(";"))
-                                .mapToDouble(Double::parseDouble)
-                                .toArray();
+                                .mapToDouble(Double::parseDouble).toArray();
                         RealVector itemVector = new ArrayRealVector(itemFactors);
-
                         // prediction is the dot product of vectors
                         double prediction = userVector.dotProduct(itemVector);
                         out.printf("ALS Prediction =  %f \n", prediction);

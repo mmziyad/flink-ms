@@ -14,7 +14,7 @@ import java.io.PrintWriter;
 import java.util.Optional;
 
 /**
- * Created by zis on 06/05/17.
+ * SVM java client accepting point queries from console
  */
 public class SVMPredict {
 
@@ -22,7 +22,8 @@ public class SVMPredict {
 
         if (args.length == 0) {
             throw new IllegalArgumentException("Missing required job ID argument. "
-                    + "Usage: ./de.tub.it4bi.modelserving.qs.ALSPredict <jobID> [jobManagerHost] [jobManagerPort]");
+                    + "Usage: ./de.tub.it4bi.modelserving.qs.ALSPredict " +
+                    "<jobID> [jobManagerHost] [jobManagerPort]");
         }
         String jobIdParam = args[0];
 
@@ -43,15 +44,13 @@ public class SVMPredict {
 
         final Time queryTimeout = Time.seconds(5);
 
-        try (// This helper is for convenience and not part of Flink
-             QueryClientHelper<String, Tuple2<String, String>> client = new QueryClientHelper<>(
+        try (QueryClientHelper<String, Tuple2<String, String>> client = new QueryClientHelper<>(
                      jobManagerHost,
                      jobManagerPort,
                      jobId,
                      keySerializer,
                      valueSerializer,
                      queryTimeout)) {
-
             printUsage();
             ConsoleReader reader = new ConsoleReader();
             reader.setPrompt("$ ");
@@ -59,7 +58,6 @@ public class SVMPredict {
 
             String line;
             while ((line = reader.readLine()) != null) {
-                // "4:0.161826 5:0.0758621 6:0.176471 11:0.428571 17:0.860463"
                 out.printf("[info] Querying the model for vector '%s' \n", line);
                 try {
                     String tokens[] = line.trim().split(" ");

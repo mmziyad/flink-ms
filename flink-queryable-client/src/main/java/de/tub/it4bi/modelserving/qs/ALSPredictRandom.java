@@ -22,7 +22,6 @@ import java.util.Random;
  * Creates random queries for ALS model serving using Flink queryable state.
  * Takes number of queries and bounds for feature IDs as main input parameters.
  * Measure the time taken to process each <user ID, item ID > prediction.
- * Created by zis on 06/05/17.
  */
 public class ALSPredictRandom {
 

@@ -21,7 +21,6 @@ import java.util.Random;
  * Creates random queries for SVM model serving using Flink queryable state.
  * Takes number of queries and max number of features as main input parameters.
  * Measure the time taken to process each sparse vector classification.
- * Created by zis on 06/05/17.
  */
 public class SVMPredictRandom {
     public static void main(String[] args) throws Exception {
@@ -68,18 +67,16 @@ public class SVMPredictRandom {
                 long startTime = System.currentTimeMillis();
                 for (int featureID : queryVector.keySet()) {
                     try {
-                        Optional<Tuple2<String, String>> modelVal =
-                                client.queryState("SVM_MODEL", String.valueOf(featureID));
+                        Optional<Tuple2<String, String>> modelVal = client.queryState("SVM_MODEL", String.valueOf(featureID));
                         if (!modelVal.isPresent()) {
                             System.out.printf("Feature %s do not exist in the model. \n", featureID);
-                            break;
+                            continue;
                         }
                         double refVal = Double.parseDouble(modelVal.get().f1);
                         rawValue += refVal * queryVector.get(featureID);
                     } catch (Exception e) {
                         System.out.println("current query failed because of the following Exception:");
                         e.printStackTrace();
-                        break;
                     }
                 }
 

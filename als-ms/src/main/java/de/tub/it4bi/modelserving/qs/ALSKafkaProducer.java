@@ -10,10 +10,10 @@ import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010.FlinkKa
 import org.apache.flink.streaming.util.serialization.SimpleStringSchema;
 
 /**
- * Created by zis on 06/05/17.
+ * Load the ALS model from the input filesystem to the Kafka topic.
  */
 public class ALSKafkaProducer {
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         // create execution environment
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -36,6 +36,10 @@ public class ALSKafkaProducer {
         myProducerConfig.setLogFailuresOnly(false);   // "false" by default
         myProducerConfig.setFlushOnCheckpoint(true);  // "false" by default
 
-        env.execute();
+        try {
+            env.execute();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

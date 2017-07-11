@@ -68,11 +68,13 @@ public class ALSPredictRandom {
                     if (!userTuple.isPresent()) {
                         System.out.printf("User Factors do not exist in the model " +
                                 "for the user: %s \n", uId);
+                        i--;
                         continue;
                     }
                     if (!itemTuple.isPresent()) {
                         System.out.printf("Item Factors do not exist in the model " +
                                 "for the item: %s \n", iId);
+                        i--;
                         continue;
                     }
                     // create user vector

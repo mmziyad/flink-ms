@@ -82,6 +82,7 @@ public class QueryClientHelper<K, V> implements AutoCloseable {
         Configuration config = new Configuration();
         config.setString(JobManagerOptions.ADDRESS, jobManagerHost);
         config.setInteger(JobManagerOptions.PORT, jobManagerPort);
+
         final HighAvailabilityServices highAvailabilityServices =
                 HighAvailabilityServicesUtils.createHighAvailabilityServices(
                         config,
@@ -89,9 +90,7 @@ public class QueryClientHelper<K, V> implements AutoCloseable {
                         HighAvailabilityServicesUtils.AddressResolution.TRY_ADDRESS_RESOLUTION);
 
         this.client = new QueryableStateClient(config, highAvailabilityServices);
-
     }
-
 
     /**
      * Queries a state instance for the key.

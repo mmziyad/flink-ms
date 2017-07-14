@@ -45,7 +45,9 @@ public class ALSPredictRandom {
                 }).createSerializer(new ExecutionConfig());
 
         Random r = new Random();
-        BufferedWriter writer = new BufferedWriter(new FileWriter(params.getRequired("outputFile")));
+        BufferedWriter outWriter = new BufferedWriter(new FileWriter(params.getRequired("outputFile")));
+        BufferedWriter deltaWriter = new BufferedWriter(new FileWriter(params.getRequired("deltaFile")));
+
 
         try (QueryClientHelper<String, Tuple2<String, String>> client = new QueryClientHelper<>(
                 jobManagerHost,
@@ -92,10 +94,13 @@ public class ALSPredictRandom {
                     // prediction is the dot product of vectors
                     double prediction = userVector.dotProduct(itemVector);
                     long endTime = System.currentTimeMillis();
-                    String outputLine = uId + "," + iId + "," +
-                            prediction + "," + (endTime - startTime);
-                    writer.write(outputLine);
-                    writer.newLine();
+                    String outputLine = uId + "," + iId + "," + prediction + "," + (endTime - startTime);
+                    String deltaLine = uId + "," + iId + "," + Integer.toString(r.nextInt(5) + 1);
+
+                    outWriter.write(outputLine);
+                    outWriter.newLine();
+                    deltaWriter.write(deltaLine);
+                    deltaWriter.newLine();
 
                 } catch (Exception e) {
                     System.out.println("Query failed because of the following Exception:");
@@ -103,7 +108,8 @@ public class ALSPredictRandom {
                 }
             }
         }
-        writer.close();
+        outWriter.close();
+        deltaWriter.close();
         System.out.println("Output is written in the format:" +
                 "User ID, Item ID, ALS prediction, Query time in milliseconds");
     }

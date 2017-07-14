@@ -19,7 +19,7 @@ object ALSImpl {
     env.getConfig.setGlobalJobParameters(params)
 
     // only comma or tab are supported.
-    val fieldDelimiter = params.get("fieldDelimiter", ",") match {
+    val fieldDelimiter = params.get("fieldDelimiter", "comma") match {
       case "tab" => "\t"
       case "comma" => ","
     }
@@ -36,8 +36,12 @@ object ALSImpl {
         .setIterations(params.getInt("iterations", 10))
         .setNumFactors(params.getInt("numFactors", 10))
 
-      if (params.has("blocks")) als.setBlocks(params.getInt("blocks"))
-      if (params.has("temporaryPath")) als.setTemporaryPath(params.get("temporaryPath"))
+      if (params.has("blocks")) {
+        als.setBlocks(params.getInt("blocks"))
+      }
+      if (params.has("temporaryPath")) {
+        als.setTemporaryPath(params.get("temporaryPath"))
+      }
 
       // Set the other parameters via a parameter map
       val parameters = ParameterMap()
@@ -56,6 +60,7 @@ object ALSImpl {
       if (params.has("itemFactors") && params.has("userFactors")) {
         itemFactors.writeAsText(params.get("itemFactors"), WriteMode.OVERWRITE)
         userFactors.writeAsText(params.get("userFactors"), WriteMode.OVERWRITE)
+        env.execute("[ALS] model-training")
       } else {
         println("Printing results to stdout. Use --itemFactors and --userFactors to specify output locations.")
         println("==== USER FACTORS ====")
@@ -63,7 +68,6 @@ object ALSImpl {
         println("==== ITEM FACTORS ====")
         itemFactors.print()
       }
-      env.execute("ALS Training")
     } else {
       println("Use --input to specify file input.")
     }

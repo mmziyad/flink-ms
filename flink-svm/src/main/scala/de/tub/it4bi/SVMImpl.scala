@@ -46,7 +46,7 @@ object SVMImpl {
         }
         if (params.has("output")) {
           finalModel.writeAsText(params.get("output"), WriteMode.OVERWRITE)
-          env.execute("SVM Fitting")
+          env.execute("[SVM] model-fitting")
         } else {
           println("Printing result to stdout. Use --output to specify output path.")
           finalModel.print()

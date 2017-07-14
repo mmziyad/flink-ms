@@ -92,7 +92,7 @@ public class SVMKafkaConsumer {
                 .asQueryableState("SVM_MODEL", modelState);
 
         try {
-            env.execute("SVM Model Serving with Queryable State");
+            env.execute("[SVM] model-serving with queryable-state");
         } catch (Exception e) {
             e.printStackTrace();
         }

@@ -92,7 +92,7 @@ public class ALSKafkaConsumer {
                 .asQueryableState("ALS_MODEL", modelState);
 
         try {
-            env.execute("ALS Model Serving with Queryable State");
+            env.execute("[ALS] model-serving with queryable-state");
         } catch (Exception e) {
             e.printStackTrace();
         }

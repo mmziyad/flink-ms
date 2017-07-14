@@ -37,7 +37,7 @@ public class ALSKafkaProducer {
         myProducerConfig.setFlushOnCheckpoint(true);  // "false" by default
 
         try {
-            env.execute();
+            env.execute("[ALS] model-loading to kafka topic");
         } catch (Exception e) {
             e.printStackTrace();
         }

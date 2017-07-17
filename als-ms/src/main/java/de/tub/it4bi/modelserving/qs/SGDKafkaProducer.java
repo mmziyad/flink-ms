@@ -48,7 +48,8 @@ public class SGDKafkaProducer {
 
         // Apply SGD and update the model
         DataStream<String> modelUpdates = messageStream
-                .map(new InputParser(params))          // parse input rating data
+                .map(new InputParser(params))   // parse input rating data
+                .keyBy(0)
                 .map(new CurrentLatentFactors(params)) // retrieve current model parameters
                 .map(new SGDRecommender(params))       // apply SGD
                 .flatMap(new ModelUpdater());          // update model with the new parameters
@@ -79,8 +80,8 @@ public class SGDKafkaProducer {
                     Tuple3<Tuple2<Integer, WeightVector>, Tuple2<Integer, WeightVector>, Double>> {
         QueryClientHelper<String, Tuple2<String, String>> client;
         ParameterTool params;
-        String userMeanLatentFactors;
-        String itemMeanLatentFactors;
+        String userMeanFactors;
+        String itemMeanFactors;
 
         public CurrentLatentFactors(ParameterTool params) {
             this.params = params;
@@ -99,18 +100,16 @@ public class SGDKafkaProducer {
                     TypeInformation.of(new TypeHint<Tuple2<String, String>>() {
                     }).createSerializer(new ExecutionConfig());
 
-            client = new QueryClientHelper<>(
-                    jobManagerHost,
-                    jobManagerPort,
-                    jobId,
-                    keySerializer,
-                    valueSerializer,
-                    queryTimeout);
+            client = new QueryClientHelper<>(jobManagerHost, jobManagerPort, jobId,
+                    keySerializer, valueSerializer, queryTimeout);
 
-            // TODO: Load the mean user and item latent factors
-            // Option 1: store the mean vectors in the model itself
-            // Option 2: pass as a parameter string (if 100s of factors, this could be troublesome.
-            // Option 3: As broadcast variable
+            // load the mean vectors from the model and if not found, from user input.
+            // Note: In the current version, mean vectors will be queried only at the start of this job.
+            userMeanFactors = client.queryState("ALS_MODEL", "MEAN-U")
+                    .map(x -> x.f1).orElse(params.get("userMean"));
+
+            userMeanFactors = client.queryState("ALS_MODEL", "MEAN-I")
+                    .map(x -> x.f1).orElse(params.get("itemMean"));
         }
 
         @Override
@@ -121,28 +120,28 @@ public class SGDKafkaProducer {
             int itemID = value.f1;
             double rating = value.f2;
 
-            // suffix the IDs with relevant type
-            String userQuery = userID + "-U";
-            String itemQuery = itemID + "-I";
+            WeightVector uwv = extractWeightVector(userID, "-U", userMeanFactors, 0.0);
+            WeightVector iwv = extractWeightVector(itemID, "-I", itemMeanFactors, 0.0);
+            return new Tuple3<>(new Tuple2<>(userID, uwv), new Tuple2<>(itemID, iwv), rating);
+        }
 
-            Optional<Tuple2<String, String>> userTuple = client.queryState("ALS_MODEL", userQuery);
-            Optional<Tuple2<String, String>> itemTuple = client.queryState("ALS_MODEL", itemQuery);
+        private WeightVector extractWeightVector(int id, String suffix, String meanFactors, double initialBias) {
+            String queryKey = id + suffix;
+            Optional<Tuple2<String, String>> output = null;
 
-            // if no value is found in the model, use the mean values obtained after training
-            String userLatentFactors = userTuple.map(x -> x.f1).orElse(userMeanLatentFactors);
-            String itemLatentFactors = itemTuple.map(x -> x.f1).orElse(itemMeanLatentFactors);
+            try {
+                output = client.queryState("ALS_MODEL", queryKey);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
 
-            double[] userFactors = Arrays.stream(userLatentFactors.split(";"))
+            String result = output.map(x -> x.f1).orElse(meanFactors);
+            double[] latentFactors = Arrays
+                    .stream(result.split(";"))
                     .mapToDouble(Double::parseDouble).toArray();
 
-            double[] itemFactors = Arrays.stream(itemLatentFactors.split(";"))
-                    .mapToDouble(Double::parseDouble).toArray();
-
-            // TODO: If the model is updated with bias, retrieve and update here
-            WeightVector userWeightVector = new WeightVector(new DenseVector(userFactors), 0.0);
-            WeightVector itemWeightVector = new WeightVector(new DenseVector(itemFactors), 0.0);
-            return new Tuple3<>(new Tuple2<>(userID, userWeightVector),
-                    new Tuple2<>(itemID, itemWeightVector), rating);
+            // TODO: If the model contains bias, use that bias instead of initial bias
+            return new WeightVector(new DenseVector(latentFactors), initialBias);
         }
 
         @Override
@@ -169,8 +168,8 @@ public class SGDKafkaProducer {
 
             // hyper parameters for SGD online learning
             final double learningRate = params.getDouble("learningRate", 0.1);
-            final double userRegularization = params.getDouble("userRegularization", 0.0);
-            final double itemRegularization = params.getDouble("itemRegularization", 0.0);
+            final double userReg = params.getDouble("userRegularization", 0.0);
+            final double itemReg = params.getDouble("itemRegularization", 0.0);
 
             int userID = value.f0.f0;
             int itemID = value.f1.f0;
@@ -184,18 +183,18 @@ public class SGDKafkaProducer {
             double error = rating - prediction;
 
             // update bias
-            userBias += learningRate * (error - userRegularization * userBias);
-            itemBias += learningRate * (error - itemRegularization * itemBias);
+            userBias += learningRate * (error - userReg * userBias);
+            itemBias += learningRate * (error - itemReg * itemBias);
 
             // update latent factors
             for (int i = 0; i < userVector.size(); i++) {
                 double updatedLatentFactor = userVector.apply(i) + (learningRate *
-                        (error * itemVector.apply(i) - userRegularization * userVector.apply(i)));
+                        (error * itemVector.apply(i) - userReg * userVector.apply(i)));
                 userVector.update(i, updatedLatentFactor);
             }
             for (int i = 0; i < itemVector.size(); i++) {
                 double updatedLatentFactor = itemVector.apply(i) + (learningRate *
-                        (error * userVector.apply(i) - itemRegularization * itemVector.apply(i)));
+                        (error * userVector.apply(i) - itemReg * itemVector.apply(i)));
                 itemVector.update(i, updatedLatentFactor);
             }
 

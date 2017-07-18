@@ -1,5 +1,6 @@
 package de.tub.it4bi.modelserving.qs;
 
+import de.tub.it4bi.modelserving.utils.QueryClientHelper;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.functions.FlatMapFunction;

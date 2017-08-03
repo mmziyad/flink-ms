@@ -170,7 +170,6 @@ public class SGD {
             WeightVector uwv = extractWeightVector(userID, "-U", userMeanFactors, 0.0);
             WeightVector iwv = extractWeightVector(itemID, "-I", itemMeanFactors, 0.0);
 
-
             double userBias = uwv.intercept();
             double itemBias = iwv.intercept();
             Vector userVector = uwv.weights();
@@ -201,7 +200,7 @@ public class SGD {
                 sb.append(userVector.apply(i));
                 if (i != userVector.size() - 1) sb.append(";");
             }
-            // TODO: Add bias to the user record in the model
+            // TODO: Add updated bias to the user record in the model
             String userRecord = userID + ",U," + sb.toString();
             out.collect(userRecord);
 
@@ -211,7 +210,7 @@ public class SGD {
                 sb.append(itemVector.apply(i));
                 if (i != itemVector.size() - 1) sb.append(";");
             }
-            // TODO: Add bias to the item record in the model
+            // TODO: Add updated bias to the item record in the model
             String itemRecord = itemID + ",I," + sb.toString();
             out.collect(itemRecord);
         }
@@ -227,7 +226,10 @@ public class SGD {
             }
 
             String result = output.map(x -> x.f1).orElse(meanFactors);
-            double[] latentFactors = Arrays.stream(result.split(";")).mapToDouble(Double::parseDouble).toArray();
+            double[] latentFactors = Arrays
+                    .stream(result.split(";"))
+                    .mapToDouble(Double::parseDouble)
+                    .toArray();
             //TODO: If the model contains bias, use that bias instead of user provided bias
             return new WeightVector(new DenseVector(latentFactors), bias);
         }

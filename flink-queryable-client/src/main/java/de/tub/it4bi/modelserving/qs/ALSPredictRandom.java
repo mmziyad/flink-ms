@@ -1,7 +1,5 @@
 package de.tub.it4bi.modelserving.qs;
 
-import org.apache.commons.math3.linear.ArrayRealVector;
-import org.apache.commons.math3.linear.RealVector;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
@@ -46,8 +44,6 @@ public class ALSPredictRandom {
 
         Random r = new Random();
         BufferedWriter outWriter = new BufferedWriter(new FileWriter(params.getRequired("outputFile")));
-        BufferedWriter deltaWriter = new BufferedWriter(new FileWriter(params.getRequired("deltaFile")));
-
 
         try (QueryClientHelper<String, Tuple2<String, String>> client = new QueryClientHelper<>(
                 jobManagerHost,
@@ -83,24 +79,22 @@ public class ALSPredictRandom {
                     double[] userFactors = Arrays.stream(userTuple.get().f1.split(";"))
                             .mapToDouble(Double::parseDouble)
                             .toArray();
-                    RealVector userVector = new ArrayRealVector(userFactors);
 
                     // create item vector
                     double[] itemFactors = Arrays.stream(itemTuple.get().f1.split(";"))
                             .mapToDouble(Double::parseDouble)
                             .toArray();
-                    RealVector itemVector = new ArrayRealVector(itemFactors);
 
                     // prediction is the dot product of vectors
-                    double prediction = userVector.dotProduct(itemVector);
+                    double prediction = 0;
+                    for (int j=0 ; j < userFactors.length; j++){
+                        prediction += userFactors[j] * itemFactors[j];
+                    }
                     long endTime = System.currentTimeMillis();
                     String outputLine = uId + "," + iId + "," + prediction + "," + (endTime - startTime);
-                    String deltaLine = uId + "," + iId + "," + Integer.toString(r.nextInt(5) + 1);
 
                     outWriter.write(outputLine);
                     outWriter.newLine();
-                    deltaWriter.write(deltaLine);
-                    deltaWriter.newLine();
 
                 } catch (Exception e) {
                     System.out.println("Query failed because of the following Exception:");
@@ -109,7 +103,6 @@ public class ALSPredictRandom {
             }
         }
         outWriter.close();
-        deltaWriter.close();
         System.out.println("Output is written in the format:" +
                 "User ID, Item ID, ALS prediction, Query time in milliseconds");
     }

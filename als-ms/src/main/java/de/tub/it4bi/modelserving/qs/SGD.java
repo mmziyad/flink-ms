@@ -29,7 +29,7 @@ import java.util.Arrays;
 import java.util.Optional;
 
 /**
- * Perform online updates to the Recommender model using SGDV0
+ * Perform online updates to the Recommender model using SGD
  */
 public class SGD {
     public static void main(String[] args) {
@@ -63,7 +63,7 @@ public class SGD {
             System.exit(-1);
         }
 
-        // Apply SGDV0 and update the model
+        // Apply SGD and update the model
         DataStream<String> modelUpdates = messageStream
                 .map(new InputParser(params))
                 .flatMap(new SGDStep(params));
@@ -84,7 +84,7 @@ public class SGD {
             modelUpdates.writeAsText(params.get("outputPath"), FileSystem.WriteMode.OVERWRITE);
         }
         try {
-            env.execute("[ALS] online-updates using SGDV0");
+            env.execute("[ALS] online-updates using SGD");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -110,7 +110,7 @@ public class SGD {
     }
 
     /**
-     * Apply SGDV0 and produce updated vectors to be sent to Kafka
+     * Apply SGD and produce updated vectors to be sent to Kafka
      */
 
     private static class SGDStep extends RichFlatMapFunction<Tuple3<Integer, Integer, Double>, String> {
@@ -159,7 +159,7 @@ public class SGD {
         @Override
         public void flatMap(Tuple3<Integer, Integer, Double> value, Collector<String> out) throws Exception {
 
-            // hyper parameters for SGDV0 online learning
+            // hyper parameters for SGD online learning
             final double learningRate = params.getDouble("learningRate", 0.1);
             final double userReg = params.getDouble("userRegularization", 0.0);
             final double itemReg = params.getDouble("itemRegularization", 0.0);

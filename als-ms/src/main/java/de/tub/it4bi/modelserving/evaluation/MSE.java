@@ -152,7 +152,6 @@ public class MSE {
                     for (int i = 0; i < userFactors.length; i++) {
                         prediction += userFactors[i] * itemFactors[i];
                     }
-                    // TODO: Examine why NaN is appearing after SGDV0
                     out.collect(new Tuple2<>(rating, prediction));
                 } else {
                     System.err.println("No record found for the itemID query: " + itemID);

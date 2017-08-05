@@ -17,6 +17,9 @@ import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.ml.common.WeightVector;
+import org.apache.flink.ml.math.DenseVector;
+import org.apache.flink.ml.math.Vector;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
@@ -31,7 +34,7 @@ import java.util.Optional;
 /**
  * Perform online updates to the Recommender model using SGDV0
  */
-public class SGD {
+public class SGDV0 {
     public static void main(String[] args) {
         // create execution environment
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -65,7 +68,7 @@ public class SGD {
 
         // Apply SGDV0 and update the model
         DataStream<String> modelUpdates = messageStream
-                .map(new InputParser(params))
+                .map(new InputParser(params))// parse input rating data
                 .flatMap(new SGDStep(params));
 
         if (params.getRequired("outputMode").equals("kafka")) {
@@ -79,7 +82,6 @@ public class SGD {
             // the following is necessary for at-least-once delivery guarantee
             myProducerConfig.setLogFailuresOnly(false);   // "false" by default
             myProducerConfig.setFlushOnCheckpoint(true);  // "false" by default
-
         } else if (params.getRequired("outputMode").equals("hdfs") && params.has("outputPath")) {
             modelUpdates.writeAsText(params.get("outputPath"), FileSystem.WriteMode.OVERWRITE);
         }
@@ -104,8 +106,7 @@ public class SGD {
         public Tuple3<Integer, Integer, Double> map(String value) throws Exception {
             // values are expected in the order: userID, itemID, rating
             String tokens[] = value.split(params.get("fieldDelimiter", "\t"));
-            return new Tuple3<>(Integer.parseInt(tokens[0]), Integer.parseInt(tokens[1]),
-                    Double.parseDouble(tokens[2]));
+            return new Tuple3<>(Integer.parseInt(tokens[0]), Integer.parseInt(tokens[1]), Double.parseDouble(tokens[2]));
         }
     }
 
@@ -118,6 +119,7 @@ public class SGD {
         QueryClientHelper<String, Tuple2<String, String>> client;
         String userMeanFactors;
         String itemMeanFactors;
+        StringBuilder sb = new StringBuilder();
 
         public SGDStep(ParameterTool params) {
             this.params = params;
@@ -131,19 +133,18 @@ public class SGD {
             final Time queryTimeout = Time.seconds(params.getInt("queryTimeout", 5));
 
             final StringSerializer keySerializer = StringSerializer.INSTANCE;
-            final TypeSerializer<Tuple2<String, String>> valueSerializer = TypeInformation.of(new TypeHint<Tuple2<String, String>>() {
-            }).createSerializer(new ExecutionConfig());
+            final TypeSerializer<Tuple2<String, String>> valueSerializer =
+                    TypeInformation.of(new TypeHint<Tuple2<String, String>>() {
+                    }).createSerializer(new ExecutionConfig());
 
             client = new QueryClientHelper<>(jobManagerHost, jobManagerPort, jobId,
                     keySerializer, valueSerializer, queryTimeout);
 
             // load the mean vectors from the model and if not found, from user input.
             // Note: In the current version, mean vectors will be queried only at the start of this job.
-            userMeanFactors = client
-                    .queryState("ALS_MODEL", "MEAN-U")
+            userMeanFactors = client.queryState("ALS_MODEL", "MEAN-U")
                     .map(x -> x.f1).orElse(params.get("userMean"));
-            itemMeanFactors = client
-                    .queryState("ALS_MODEL", "MEAN-I")
+            itemMeanFactors = client.queryState("ALS_MODEL", "MEAN-I")
                     .map(x -> x.f1).orElse(params.get("itemMean"));
 
             if (userMeanFactors == null || itemMeanFactors == null) {
@@ -168,69 +169,93 @@ public class SGD {
             int itemID = value.f1;
             double rating = value.f2;
 
+            WeightVector uwv = extractWeightVector(userID, "-U", userMeanFactors, 0.0);
+            WeightVector iwv = extractWeightVector(itemID, "-I", itemMeanFactors, 0.0);
 
-            Tuple2<String, Double> userParams = getModelParameters(userID, "-U", userMeanFactors, 0.0);
-            Tuple2<String, Double> itemParams = getModelParameters(itemID, "-I", itemMeanFactors, 0.0);
+            double userBias = uwv.intercept();
+            double itemBias = iwv.intercept();
+            Vector userVector = uwv.weights();
+            Vector itemVector = iwv.weights();
 
-            double[] userFactors = Arrays.stream(userParams.f0.split(";"))
-                    .mapToDouble(Double::parseDouble).toArray();
-
-            double[] itemFactors = Arrays.stream(itemParams.f0.split(";"))
-                    .mapToDouble(Double::parseDouble).toArray();
-
-            // calculate the error
-            double prediction = 0;
-            for (int i = 0; i < userFactors.length; i++) {
-                prediction += userFactors[i] * itemFactors[i];
-            }
+            double prediction = userVector.dot(itemVector);
             double error = rating - prediction;
-
-            double userBias = userParams.f1;
-            double itemBias = itemParams.f1;
 
             // update bias
             userBias += learningRate * (error - userReg * userBias);
             itemBias += learningRate * (error - itemReg * itemBias);
 
             // update latent factors
-            String[] outputUserFactors = new String[userFactors.length];
-            String[] outputItemFactors = new String[itemFactors.length];
-
-            for (int i = 0; i < userFactors.length; i++) {
-                outputUserFactors[i] = String.valueOf(userFactors[i] + learningRate *
-                        (error * itemFactors[i] - userReg * userFactors[i]));
+            for (int i = 0; i < userVector.size(); i++) {
+                double updatedLatentFactor = userVector.apply(i) + (learningRate *
+                        (error * itemVector.apply(i) - userReg * userVector.apply(i)));
+                userVector.update(i, updatedLatentFactor);
+            }
+            for (int i = 0; i < itemVector.size(); i++) {
+                double updatedLatentFactor = itemVector.apply(i) + (learningRate *
+                        (error * userVector.apply(i) - itemReg * itemVector.apply(i)));
+                itemVector.update(i, updatedLatentFactor);
             }
 
-            for (int i = 0; i < itemFactors.length; i++) {
-                outputItemFactors[i] = String.valueOf(itemFactors[i] + learningRate *
-                        (error * userFactors[i] - itemReg * itemFactors[i]));
-            }
-
-            // TODO: Add updated bias to the user record in the model
             // prepare user record
-            String userRecord = userID + ",U," + String.join(";", outputUserFactors);
-            out.collect(userRecord);
+            sb.setLength(0);
+            for (int i = 0; i < userVector.size(); i++) {
+                sb.append(userVector.apply(i));
+                if (i != userVector.size() - 1) sb.append(";");
+            }
+            // TODO: Add updated bias to the user record in the model
+            String userRecord = userID + ",U," + sb.toString();
+            if (userRecord.contains("NaN")) {
+                System.out.println("NaN in userRecord" + userRecord);
+            } else {
+                out.collect(userRecord);
+            }
 
             // prepare item record
-            String itemRecord = itemID + ",I," + String.join(";", outputItemFactors);
-            out.collect(itemRecord);
+            sb.setLength(0);
+            for (int i = 0; i < itemVector.size(); i++) {
+                sb.append(itemVector.apply(i));
+                if (i != itemVector.size() - 1) sb.append(";");
+            }
+            // TODO: Add updated bias to the item record in the model
+            String itemRecord = itemID + ",I," + sb.toString();
+
+            if (itemRecord.contains("NaN")) {
+                System.out.println("NaN in itemRecord" + itemRecord);
+            } else {
+                out.collect(itemRecord);
+            }
         }
 
-        private Tuple2<String, Double> getModelParameters(int id, String suffix, String meanFactors, double initialBias) {
+        private WeightVector extractWeightVector(int id, String suffix, String meanFactors, double bias) {
             String queryKey = id + suffix;
             Optional<Tuple2<String, String>> output = null;
+
             try {
                 output = client.queryState("ALS_MODEL", queryKey);
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            String latentFactors = output.map(x -> x.f1).orElse(meanFactors);
-            // double bias = output.map(x -> x.f2).orElse(initialBias);
+            String result;
+            // String result = output.map(x -> x.f1).orElse(meanFactors);
 
-            if (latentFactors.contains("NaN")) System.out.println("NaN detected for: " + id + suffix);
+            if (output.isPresent()) {
+                result = output.get().f1;
+            } else {
+                result = meanFactors;
+            }
+            double[] latentFactors = Arrays
+                    .stream(result.split(";"))
+                    .mapToDouble(Double::parseDouble)
+                    .toArray();
+
+            for (int i = 0; i < latentFactors.length; i++) {
+                if (((Double) latentFactors[i]).isNaN()) {
+                    System.out.println("NaN detected for: " + id + suffix);
+                }
+            }
 
             //TODO: If the model contains bias, use that bias instead of user provided bias
-            return new Tuple2<>(latentFactors, initialBias);
+            return new WeightVector(new DenseVector(latentFactors), bias);
         }
     }
 }

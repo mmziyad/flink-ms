@@ -20,7 +20,7 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Created by zis on 06/05/17.
+ * Consume the SVM model from the Kafka topic and load to the specified state backend as queryable state
  */
 public class SVMKafkaConsumer {
 
@@ -30,8 +30,11 @@ public class SVMKafkaConsumer {
 
         if (parameterTool.getNumberOfParameters() < 6) {
             System.out.println("Missing parameters!\nUsage: Kafka --topic <topic> " +
-                    "--bootstrap.servers <kafka brokers> --zookeeper.connect <zk quorum> --group.id <some id>" +
-                    "--checkpointDataUri <hdfs/local url> --stateBackend <rocksdb/memory/fs> ");
+                    "--bootstrap.servers <kafka brokers> " +
+                    "--zookeeper.connect <zk quorum> " +
+                    "--group.id <some id>" +
+                    "--checkpointDataUri <hdfs/local url> " +
+                    "--stateBackend <rocksdb/memory/fs> ");
             return;
         }
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -68,13 +71,15 @@ public class SVMKafkaConsumer {
                 parameterTool.getProperties()));
 
         // From the kafka stream, store the feature ID and its value
-        DataStream<Tuple2<String, String>> modelFactors = messageStream.map(new MapFunction<String, Tuple2<String, String>>() {
-            @Override
-            public Tuple2<String, String> map(String value) throws Exception {
-                String tokens[] = value.split(",");
-                return new Tuple2<String, String>(tokens[0], tokens[1]);
-            }
-        });
+        DataStream<Tuple2<String, String>> modelFactors = messageStream
+                .rebalance() // evenly distribute the load to next operator
+                .map(new MapFunction<String, Tuple2<String, String>>() {
+                    @Override
+                    public Tuple2<String, String> map(String value) throws Exception {
+                        String tokens[] = value.split(",");
+                        return new Tuple2<String, String>(tokens[0], tokens[1]);
+                    }
+                });
 
         // store the values in the state
         ValueStateDescriptor<Tuple2<String, String>> modelState = new ValueStateDescriptor<>(
@@ -87,7 +92,7 @@ public class SVMKafkaConsumer {
                 .asQueryableState("SVM_MODEL", modelState);
 
         try {
-            env.execute("SVM Model Serving with Queryable State");
+            env.execute("[SVM] model-serving with queryable-state");
         } catch (Exception e) {
             e.printStackTrace();
         }

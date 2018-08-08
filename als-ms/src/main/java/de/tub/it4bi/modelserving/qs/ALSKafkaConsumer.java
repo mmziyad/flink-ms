@@ -20,20 +20,22 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Created by zis on 06/05/17.
+ * Consume the ALS model from the Kafka topic and load to the specified state backend as queryable state
  */
 public class ALSKafkaConsumer {
-
     public static void main(String[] args) {
         // parse input arguments
         final ParameterTool parameterTool = ParameterTool.fromArgs(args);
 
         if (parameterTool.getNumberOfParameters() < 6) {
             System.out.println("Missing parameters!\nUsage: Kafka --topic <topic> " +
-                    "--bootstrap.servers <kafka brokers> --zookeeper.connect <zk quorum> --group.id <some id>" +
-                    "--checkpointDataUri <hdfs/local url> --stateBackend <rocksdb/memory/fs> ");
+                    "--bootstrap.servers <kafka brokers> " +
+                    "--zookeeper.connect <zk quorum> --group.id <some id>" +
+                    "--checkpointDataUri <hdfs/local url> " +
+                    "--stateBackend <rocksdb/memory/fs> ");
             return;
         }
+
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.getConfig().disableSysoutLogging();
         env.getConfig().setGlobalJobParameters(parameterTool);
@@ -68,14 +70,16 @@ public class ALSKafkaConsumer {
                 parameterTool.getProperties()));
 
         // From the kafka stream, derive the ID, type (user/item), and feature values
-        DataStream<Tuple2<String, String>> modelFactors = messageStream.map(new MapFunction<String, Tuple2<String, String>>() {
-            @Override
-            public Tuple2<String, String> map(String value) throws Exception {
-                String tokens[] = value.split(",");
-                String id = tokens[0] + "-" + tokens[1];
-                return new Tuple2<String, String>(id, tokens[2]);
-            }
-        });
+        DataStream<Tuple2<String, String>> modelFactors = messageStream
+                .rebalance() // evenly distribute the load to next operator
+                .map(new MapFunction<String, Tuple2<String, String>>() {
+                    @Override
+                    public Tuple2<String, String> map(String value) throws Exception {
+                        String tokens[] = value.split(",");
+                        String id = tokens[0] + "-" + tokens[1];
+                        return new Tuple2<String, String>(id, tokens[2]);
+                    }
+                });
 
         // store the values in the state
         ValueStateDescriptor<Tuple2<String, String>> modelState = new ValueStateDescriptor<>(
@@ -88,7 +92,7 @@ public class ALSKafkaConsumer {
                 .asQueryableState("ALS_MODEL", modelState);
 
         try {
-            env.execute("ALS Model Serving with Queryable State");
+            env.execute("[ALS] model-serving with queryable-state");
         } catch (Exception e) {
             e.printStackTrace();
         }

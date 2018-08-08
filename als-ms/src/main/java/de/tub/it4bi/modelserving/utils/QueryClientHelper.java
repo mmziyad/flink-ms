@@ -1,4 +1,4 @@
-package de.tub.it4bi.modelserving.qs;
+package de.tub.it4bi.modelserving.utils;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
@@ -66,7 +66,7 @@ public class QueryClientHelper<K, V> implements AutoCloseable {
      * @param queryTimeout    Timeout for queries.
      * @throws Exception Thrown if creating the {@link QueryableStateClient} fails.
      */
-    QueryClientHelper(
+    public QueryClientHelper(
             String jobManagerHost,
             int jobManagerPort,
             JobID jobId,
@@ -82,6 +82,7 @@ public class QueryClientHelper<K, V> implements AutoCloseable {
         Configuration config = new Configuration();
         config.setString(JobManagerOptions.ADDRESS, jobManagerHost);
         config.setInteger(JobManagerOptions.PORT, jobManagerPort);
+
         final HighAvailabilityServices highAvailabilityServices =
                 HighAvailabilityServicesUtils.createHighAvailabilityServices(
                         config,
@@ -89,9 +90,7 @@ public class QueryClientHelper<K, V> implements AutoCloseable {
                         HighAvailabilityServicesUtils.AddressResolution.TRY_ADDRESS_RESOLUTION);
 
         this.client = new QueryableStateClient(config, highAvailabilityServices);
-
     }
-
 
     /**
      * Queries a state instance for the key.
@@ -102,7 +101,7 @@ public class QueryClientHelper<K, V> implements AutoCloseable {
      * @param key  The key to query
      * @return The returned value if it is available
      */
-    Optional<V> queryState(String name, K key) throws Exception {
+    public Optional<V> queryState(String name, K key) throws Exception {
         if (name == null) {
             throw new NullPointerException("Name");
         }

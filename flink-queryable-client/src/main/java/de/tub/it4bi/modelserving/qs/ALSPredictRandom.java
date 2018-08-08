@@ -1,7 +1,5 @@
 package de.tub.it4bi.modelserving.qs;
 
-import org.apache.commons.math3.linear.ArrayRealVector;
-import org.apache.commons.math3.linear.RealVector;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
@@ -22,7 +20,6 @@ import java.util.Random;
  * Creates random queries for ALS model serving using Flink queryable state.
  * Takes number of queries and bounds for feature IDs as main input parameters.
  * Measure the time taken to process each <user ID, item ID > prediction.
- * Created by zis on 06/05/17.
  */
 public class ALSPredictRandom {
 
@@ -46,7 +43,7 @@ public class ALSPredictRandom {
                 }).createSerializer(new ExecutionConfig());
 
         Random r = new Random();
-        BufferedWriter writer = new BufferedWriter(new FileWriter(params.getRequired("outputFile")));
+        BufferedWriter outWriter = new BufferedWriter(new FileWriter(params.getRequired("outputFile")));
 
         try (QueryClientHelper<String, Tuple2<String, String>> client = new QueryClientHelper<>(
                 jobManagerHost,
@@ -69,32 +66,35 @@ public class ALSPredictRandom {
                     if (!userTuple.isPresent()) {
                         System.out.printf("User Factors do not exist in the model " +
                                 "for the user: %s \n", uId);
+                        i--;
                         continue;
                     }
                     if (!itemTuple.isPresent()) {
                         System.out.printf("Item Factors do not exist in the model " +
                                 "for the item: %s \n", iId);
+                        i--;
                         continue;
                     }
                     // create user vector
                     double[] userFactors = Arrays.stream(userTuple.get().f1.split(";"))
                             .mapToDouble(Double::parseDouble)
                             .toArray();
-                    RealVector userVector = new ArrayRealVector(userFactors);
 
                     // create item vector
                     double[] itemFactors = Arrays.stream(itemTuple.get().f1.split(";"))
                             .mapToDouble(Double::parseDouble)
                             .toArray();
-                    RealVector itemVector = new ArrayRealVector(itemFactors);
 
                     // prediction is the dot product of vectors
-                    double prediction = userVector.dotProduct(itemVector);
+                    double prediction = 0;
+                    for (int j=0 ; j < userFactors.length; j++){
+                        prediction += userFactors[j] * itemFactors[j];
+                    }
                     long endTime = System.currentTimeMillis();
-                    String outputLine = uId + "," + iId + "," +
-                            prediction + "," + (endTime - startTime);
-                    writer.write(outputLine);
-                    writer.newLine();
+                    String outputLine = uId + "," + iId + "," + prediction + "," + (endTime - startTime);
+
+                    outWriter.write(outputLine);
+                    outWriter.newLine();
 
                 } catch (Exception e) {
                     System.out.println("Query failed because of the following Exception:");
@@ -102,7 +102,7 @@ public class ALSPredictRandom {
                 }
             }
         }
-        writer.close();
+        outWriter.close();
         System.out.println("Output is written in the format:" +
                 "User ID, Item ID, ALS prediction, Query time in milliseconds");
     }
